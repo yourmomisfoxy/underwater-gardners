@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Underwater Gardeners</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+            background: #001a33;
+            height: 3000vh;
+        }
+
+        .title-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            opacity: 1;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
+            background: linear-gradient(to bottom, #1e5a7a 0%, #0d3d56 100%);
+        }
+
+        .main-title {
+            font-size: 4.5rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 4px 30px rgba(0, 0, 0, 0.8);
+            margin-bottom: 1.5rem;
+            text-align: center;
+            padding: 0 2rem;
+        }
+
+        .subtitle {
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+            font-weight: 300;
+            text-align: center;
+            padding: 0 2rem;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .overlay-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 3rem;
+            text-align: center;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 1s ease;
+            text-shadow: 0 4px 30px rgba(0, 0, 0, 0.95), 0 2px 15px rgba(0, 0, 0, 0.95);
+            font-weight: 300;
+            letter-spacing: 1px;
+            pointer-events: none;
+            max-width: 90%;
+            line-height: 1.6;
+        }
+
+        .year-display {
+            position: fixed;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 8rem;
+            color: rgba(255, 255, 255, 0.35);
+            font-weight: bold;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 1s ease;
+            font-family: 'Courier New', monospace;
+            pointer-events: none;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.9);
+        }
+
+        .counter-display {
+            position: fixed;
+            top: 15%;
+            right: 5%;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 2rem;
+            border-radius: 15px;
+            color: white;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 1s ease;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .counter-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+
+        .counter-number {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+
+        .scroll-indicator {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 1.4rem;
+            z-index: 100;
+            animation: bounce 2s infinite;
+            opacity: 1;
+            transition: opacity 0.5s;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
+            40% { transform: translateX(-50%) translateY(-15px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="title-screen" id="titleScreen">
+        <div class="main-title">The Underwater Gardeners</div>
+        <div class="subtitle">A Caribbean Reef Story</div>
+    </div>
+    
+    <canvas id="canvas"></canvas>
+    
+    <div class="year-display" id="yearDisplay"></div>
+    <div class="overlay-text" id="overlayText"></div>
+    
+    <div class="counter-display" id="counterDisplay">
+        <div class="counter-label">SEA URCHINS per m²</div>
+        <div class="counter-number" id="counterNumber">0</div>
+    </div>
+    
+    <div class="scroll-indicator" id="scrollHint">Scroll to dive</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const yearDisplay = document.getElementById('yearDisplay');
+        const overlayText = document.getElementById('overlayText');
+        const counterDisplay = document.getElementById('counterDisplay');
+        const counterNumber = document.getElementById('counterNumber');
+        const scrollHint = document.getElementById('scrollHint');
+        const titleScreen = document.getElementById('titleScreen');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+
+        class Ripple {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0;
+                this.maxRadius = 100 + Math.random() * 50;
+                this.opacity = 0.6;
+                this.speed = 2;
+            }
+            
+            update() {
+                this.radius += this.speed;
+                this.opacity -= 0.01;
+            }
+            
+            draw() {
+                ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity * 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        let ripples = [];
+
+        class Urchin {
+            constructor(x, y) {
+                this.baseX = x;
+                this.baseY = y;
+                this.x = x;
+                this.y = y;
+                this.size = 12 + Math.random() * 8;
+                this.spineLength = this.size * 2;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = 0.003;
+                this.alive = true;
+                this.opacity = 1;
+                this.moveAngle = Math.random() * Math.PI * 2;
+                this.moveSpeed = 0.04 + Math.random() * 0.04;
+                this.moveRadius = 15 + Math.random() * 20;
+                this.grazing = false;
+            }
+            
+            update() {
+                if (this.grazing && this.alive) {
+                    this.moveAngle += this.moveSpeed;
+                    this.x = this.baseX + Math.cos(this.moveAngle) * this.moveRadius;
+                    this.y = this.baseY + Math.sin(this.moveAngle) * (this.moveRadius * 0.3);
+                } else {
+                    this.x = this.baseX;
+                    this.y = this.baseY;
+                }
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                ctx.strokeStyle = this.alive ? '#0a0a0a' : '#555';
+                ctx.lineWidth = 2;
+                const spineCount = 20;
+                for (let i = 0; i < spineCount; i++) {
+                    const angle = (Math.PI * 2 * i) / spineCount;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    const length = this.spineLength + Math.sin(Date.now() / 1000 + i) * 2;
+                    ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+                    ctx.stroke();
+                }
+                
+                ctx.fillStyle = this.alive ? '#000000' : '#666';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+                this.rotation += this.rotationSpeed;
+            }
+        }
+
+        class Coral {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 30 + Math.random() * 50;
+                this.height = 50 + Math.random() * 80;
+                const colors = ['#ffb3d9', '#b3d9ff', '#ffd9b3', '#d9b3ff', '#ffccf2'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.branches = 3 + Math.floor(Math.random() * 3);
+                this.opacity = 1;
+                this.sway = Math.random() * Math.PI * 2;
+                this.suffocating = false;
+                this.suffocateProgress = 0;
+            }
+            
+            update() {
+                if (this.suffocating) {
+                    this.suffocateProgress += 0.01;
+                }
+            }
+            
+            draw() {
+                ctx.save();
+                let drawOpacity = this.opacity * 0.85;
+                
+                if (this.suffocating) {
+                    drawOpacity *= Math.max(0, 1 - this.suffocateProgress);
+                }
+                
+                ctx.globalAlpha = drawOpacity;
+                
+                this.sway += 0.01;
+                const swayAmount = Math.sin(this.sway) * 3;
+                
+                for (let i = 0; i < this.branches; i++) {
+                    const branchX = this.x + (i - this.branches / 2) * (this.width / this.branches) + swayAmount;
+                    const branchWidth = this.width / (this.branches * 1.2);
+                    
+                    let coralColor = this.color;
+                    if (this.suffocating) {
+                        const grayAmount = Math.min(1, this.suffocateProgress * 2);
+                        coralColor = this.mixColors(this.color, '#555555', grayAmount);
+                    }
+                    
+                    ctx.fillStyle = coralColor;
+                    ctx.beginPath();
+                    ctx.ellipse(branchX, this.y - this.height / 2, branchWidth, this.height / 2, swayAmount * 0.02, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = this.darkenColor(coralColor, 15);
+                    for (let j = 0; j < 2; j++) {
+                        ctx.beginPath();
+                        ctx.ellipse(
+                            branchX + (Math.random() - 0.5) * branchWidth,
+                            this.y - this.height * (0.3 + j * 0.3),
+                            branchWidth * 0.6,
+                            this.height * 0.2,
+                            0, 0, Math.PI * 2
+                        );
+                        ctx.fill();
+                    }
+                }
+                
+                ctx.restore();
+            }
+            
+            mixColors(color1, color2, ratio) {
+                const hex1 = color1.replace('#', '');
+                const hex2 = color2.replace('#', '');
+                const r = Math.round(parseInt(hex1.substr(0, 2), 16) * (1 - ratio) + parseInt(hex2.substr(0, 2), 16) * ratio);
+                const g = Math.round(parseInt(hex1.substr(2, 2), 16) * (1 - ratio) + parseInt(hex2.substr(2, 2), 16) * ratio);
+                const b = Math.round(parseInt(hex1.substr(4, 2), 16) * (1 - ratio) + parseInt(hex2.substr(4, 2), 16) * ratio);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+            
+            darkenColor(color, amount) {
+                if (color.startsWith('rgb')) {
+                    return color;
+                }
+                const hex = color.replace('#', '');
+                const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - amount);
+                const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - amount);
+                const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - amount);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+        }
+
+        class Algae {
+            constructor(x) {
+                this.x = x;
+                this.baseY = canvas.height;
+                this.height = 60 + Math.random() * 100;
+                this.width = 12 + Math.random() * 18;
+                this.sway = Math.random() * Math.PI * 2;
+                this.swaySpeed = 0.015 + Math.random() * 0.015;
+                this.opacity = 0;
+                this.segments = 10;
+            }
+            
+            draw() {
+                if (this.opacity <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                
+                this.sway += this.swaySpeed;
+                
+                ctx.strokeStyle = '#2d5016';
+                ctx.lineWidth = this.width;
+                ctx.lineCap = 'round';
+                
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.baseY);
+                
+                for (let i = 1; i <= this.segments; i++) {
+                    const segY = this.baseY - (this.height / this.segments) * i;
+                    const swayAmount = Math.sin(this.sway + i * 0.3) * 15 * (i / this.segments);
+                    const segX = this.x + swayAmount;
+                    ctx.lineTo(segX, segY);
+                }
+                
+                ctx.stroke();
+                
+                ctx.fillStyle = '#4a7c2e';
+                for (let i = 2; i < this.segments; i += 2) {
+                    const segY = this.baseY - (this.height / this.segments) * i;
+                    const swayAmount = Math.sin(this.sway + i * 0.3) * 15 * (i / this.segments);
+                    const segX = this.x + swayAmount;
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(segX + 5, segY, this.width * 0.6, this.width * 1.2, Math.PI / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(segX - 5, segY, this.width * 0.6, this.width * 1.2, -Math.PI / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        class Fish {
+            constructor(type) {
+                this.type = type || 'tropical';
+                this.reset();
+                this.wobble = Math.random() * Math.PI * 2;
+                this.verticalWobble = Math.random() * Math.PI * 2;
+            }
+            
+            reset() {
+                this.x = Math.random() > 0.5 ? -50 : canvas.width + 50;
+                this.y = 50 + Math.random() * (canvas.height - 150);
+                this.direction = this.x < 0 ? 1 : -1;
+                this.opacity = 1;
+                
+                if (this.type === 'shark') {
+                    this.size = 35 + Math.random() * 25;
+                    this.speed = 0.5 + Math.random() * 0.4;
+                    this.color = '#5a6c7d';
+                } else if (this.type === 'triggerfish') {
+                    this.size = 18 + Math.random() * 12;
+                    this.speed = 0.4 + Math.random() * 0.5;
+                    this.color = '#8b7355';
+                } else if (this.type === 'sheephead') {
+                    this.size = 22 + Math.random() * 15;
+                    this.speed = 0.35 + Math.random() * 0.4;
+                    this.color = '#d4a5a5';
+                } else {
+                    this.size = 12 + Math.random() * 20;
+                    this.speed = 0.3 + Math.random() * 0.5;
+                    const colors = ['#ff85a6', '#5ad8c7', '#ffb366', '#a3e4d7', '#f9b5d0', '#ffd700', '#ff69b4', '#87ceeb'];
+                    this.color = colors[Math.floor(Math.random() * colors.length)];
+                }
+            }
+            
+            update() {
+                this.x += this.speed * this.direction;
+                this.wobble += 0.08;
+                this.verticalWobble += 0.03;
+                this.y += Math.sin(this.wobble) * 0.8 + Math.cos(this.verticalWobble) * 0.5;
+                
+                if (this.direction > 0 && this.x > canvas.width + 50) this.reset();
+                if (this.direction < 0 && this.x < -50) this.reset();
+            }
+            
+            draw() {
+                if (this.opacity <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(this.x, this.y);
+                if (this.direction < 0) ctx.scale(-1, 1);
+                
+                if (this.type === 'shark') {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, this.size * 1.5, this.size * 0.5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(this.size * 0.2, -this.size * 0.5);
+                    ctx.lineTo(this.size * 0.5, -this.size * 1.2);
+                    ctx.lineTo(this.size * 0.8, -this.size * 0.5);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size * 1.2, 0);
+                    ctx.lineTo(-this.size * 1.8, -this.size * 0.8);
+                    ctx.lineTo(-this.size * 1.5, 0);
+                    ctx.lineTo(-this.size * 1.8, this.size * 0.4);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, this.size * 1.2, this.size * 0.7, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size * 0.8, 0);
+                    ctx.lineTo(-this.size * 1.6, -this.size * 0.6);
+                    ctx.lineTo(-this.size * 1.6, this.size * 0.6);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(this.size * 0.2, -this.size * 0.7);
+                    ctx.lineTo(this.size * 0.5, -this.size * 1.1);
+                    ctx.lineTo(this.size * 0.8, -this.size * 0.7);
+                    ctx.fill();
+                }
+                
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.size * 0.5, -this.size * 0.25, this.size * 0.15, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.size * 0.5, -this.size * 0.25, this.size * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        class Jellyfish {
+            constructor() {
+                this.reset();
+                this.driftAngle = Math.random() * Math.PI * 2;
+            }
+            
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = -50;
+                this.size = 15 + Math.random() * 25;
+                this.speed = 0.3 + Math.random() * 0.5;
+                this.pulse = Math.random() * Math.PI * 2;
+                this.opacity = 1;
+                this.horizontalDrift = (Math.random() - 0.5) * 0.3;
+            }
+            
+            update() {
+                this.y += this.speed;
+                this.pulse += 0.05;
+                this.driftAngle += 0.02;
+                this.x += Math.sin(this.pulse * 0.5) * 0.5 + Math.cos(this.driftAngle) * 0.4;
+                
+                if (this.y > canvas.height + 50) this.reset();
+                if (this.x < -50) this.x = canvas.width + 50;
+                if (this.x > canvas.width + 50) this.x = -50;
+            }
+            
+            draw() {
+                if (this.opacity <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = this.opacity * 0.6;
+                
+                const pulseSize = this.size * (1 + Math.sin(this.pulse) * 0.2);
+                
+                ctx.fillStyle = 'rgba(200, 150, 255, 0.6)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, pulseSize, Math.PI, 0);
+                ctx.fill();
+                
+                ctx.strokeStyle = 'rgba(200, 150, 255, 0.4)';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 8; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.x + (i - 4) * 5, this.y);
+                    const length = pulseSize * 2 + Math.sin(this.pulse + i) * 10;
+                    ctx.lineTo(
+                        this.x + (i - 4) * 5 + Math.sin(this.pulse + i) * 5,
+                        this.y + length
+                    );
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        class Crab {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = canvas.height - 20 - Math.random() * 50;
+                this.size = 8 + Math.random() * 12;
+                this.speed = 0.5 + Math.random() * 0.8;
+                this.direction = Math.random() > 0.5 ? 1 : -1;
+                this.legPhase = Math.random() * Math.PI * 2;
+                this.opacity = 1;
+            }
+            
+            update() {
+                this.x += this.speed * this.direction;
+                this.legPhase += 0.1;
+                
+                if (this.x < -30) this.x = canvas.width + 30;
+                if (this.x > canvas.width + 30) this.x = -30;
+            }
+            
+            draw() {
+                if (this.opacity <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(this.x, this.y);
+                if (this.direction < 0) ctx.scale(-1, 1);
+                
+                ctx.fillStyle = '#c84b31';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.size * 1.3, this.size * 0.8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#a83a23';
+                ctx.beginPath();
+                ctx.arc(this.size * 1.2, -this.size * 0.3, this.size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.arc(this.size * 1.2, this.size * 0.3, this.size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#a83a23';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    const legY = (i - 1) * this.size * 0.4;
+                    const legMove = Math.sin(this.legPhase + i) * 3;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size * 0.5, legY);
+                    ctx.lineTo(-this.size * 1.2, legY + this.size * 0.5 + legMove);
+                    ctx.stroke();
+                }
+                
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.size * 0.3, -this.size * 0.5, this.size * 0.15, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        class SeaStar {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = canvas.height - 30 - Math.random() * 120;
+                this.size = 10 + Math.random() * 15;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.001;
+                this.color = ['#ff6b9d', '#ffa07a', '#ff8c42', '#ff1493', '#ff69b4'][Math.floor(Math.random() * 5)];
+                this.opacity = 1;
+            }
+            
+            update() {
+                this.rotation += this.rotationSpeed;
+            }
+            
+            draw() {
+                if (this.opacity <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                
+                for (let i = 0; i < 5; i++) {
+                    const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+                    const x = Math.cos(angle) * this.size;
+                    const y = Math.sin(angle) * this.size;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        const prevAngle = (Math.PI * 2 * (i - 1)) / 5 - Math.PI / 2;
+                        const cpAngle = (angle + prevAngle) / 2;
+                        ctx.quadraticCurveTo(
+                            Math.cos(cpAngle) * this.size * 0.5,
+                            Math.sin(cpAngle) * this.size * 0.5,
+                            x, y
+                        );
+                    }
+                }
+                
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.speedY = -0.3 - Math.random() * 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.6 + 0.2;
+            }
+            
+            update() {
+                this.y += this.speedY;
+                this.x += this.speedX;
+                if (this.y < -10) this.y = canvas.height + 10;
+                if (this.x < 0) this.x = canvas.width;
+                if (this.x > canvas.width) this.x = 0;
+            }
+            
+            draw(color) {
+                ctx.fillStyle = color;
+                ctx.globalAlpha = this.opacity;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        const particles = Array.from({ length: 120 }, () => new Particle());
+        
+        const urchins = [];
+        for (let i = 0; i < 60; i++) {
+            urchins.push(new Urchin(
+                50 + Math.random() * (canvas.width - 100),
+                canvas.height - 80 - Math.random() * 40
+            ));
+        }
+        
+        const corals = [];
+        for (let i = 0; i < 30; i++) {
+            corals.push(new Coral(
+                Math.random() * canvas.width,
+                canvas.height - 20
+            ));
+        }
+        
+        const algae = [];
+        for (let i = 0; i < 50; i++) {
+            algae.push(new Algae(Math.random() * canvas.width));
+        }
+        
+        const fish = [
+            ...Array.from({ length: 30 }, () => new Fish('tropical')),
+            ...Array.from({ length: 8 }, () => new Fish('shark')),
+            ...Array.from({ length: 12 }, () => new Fish('triggerfish')),
+            ...Array.from({ length: 10 }, () => new Fish('sheephead'))
+        ];
+        
+        const jellyfish = Array.from({ length: 20 }, () => new Jellyfish());
+        const crabs = Array.from({ length: 20 }, () => new Crab());
+        const seastars = Array.from({ length: 25 }, () => new SeaStar());
+
+        function drawLightRays(intensity) {
+            if (canvas.height <= 0) return;
+            const rayCount = 6;
+            for (let i = 0; i < rayCount; i++) {
+                const x = (canvas.width / (rayCount + 1)) * (i + 1) + Math.sin(Date.now() / 3000 + i) * 40;
+                const gradient = ctx.createLinearGradient(x, 0, x + 80, canvas.height);
+                const opacity1 = Math.max(0, Math.min(1, intensity * 0.8));
+                const opacity2 = Math.max(0, Math.min(1, intensity * 0.4));
+                gradient.addColorStop(0, `rgba(255, 255, 255, ${opacity1})`);
+                gradient.addColorStop(0.5, `rgba(255, 255, 255, ${opacity2})`);
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, 0, 80, canvas.height);
+            }
+        }
+
+        function animate() {
+            const scrollPercent = Math.min(1, window.scrollY / (document.body.scrollHeight - window.innerHeight));
+            
+            let r, g, b;
+            if (scrollPercent < 0.02) {
+                r = 30; g = 90; b = 122;
+            } else if (scrollPercent < 0.13) {
+                const t = (scrollPercent - 0.02) / 0.11;
+                r = 30 + t * 44; g = 90 + t * 54; b = 122 + t * 104;
+            } else if (scrollPercent < 0.27) {
+                r = 74; g = 144; b = 226;
+            } else if (scrollPercent < 0.45) {
+                const t = (scrollPercent - 0.27) / 0.18;
+                r = 74 - t * 33; g = 144 - t * 94; b = 226 - t * 161;
+            } else if (scrollPercent < 0.60) {
+                const t = (scrollPercent - 0.45) / 0.15;
+                r = 41 - t * 10; g = 50 - t * 15; b = 65 - t * 20;
+            } else if (scrollPercent < 0.75) {
+                const t = (scrollPercent - 0.60) / 0.15;
+                r = 31 + t * 24; g = 35 + t * 85; b = 45 - t * 5;
+            } else {
+                const t = Math.min(1, (scrollPercent - 0.75) / 0.25);
+                r = 55 + t * 50; g = 120 + t * 50; b = 40 + t * 100;
+            }
+            
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const lightIntensity = scrollPercent < 0.45 ? 0.12 : 
+                                   scrollPercent < 0.7 ? Math.max(0.03, 0.12 - (scrollPercent - 0.45) * 0.36) :
+                                   Math.min(0.12, 0.03 + (scrollPercent - 0.7) * 0.3);
+            drawLightRays(lightIntensity);
+            
+            ripples = ripples.filter(ripple => {
+                ripple.update();
+                if (ripple.opacity > 0 && ripple.radius < ripple.maxRadius) {
+                    ripple.draw();
+                    return true;
+                }
+                return false;
+            });
+            
+            if (scrollPercent < 0.35 && Math.random() < 0.02) {
+                ripples.push(new Ripple(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height * 0.5
+                ));
+            }
+            
+            seastars.forEach((star, index) => {
+                if (scrollPercent > 0.72 && scrollPercent < 0.80) {
+                    const fadePoint = 0.72 + (index / seastars.length) * 0.08;
+                    star.opacity = scrollPercent > fadePoint ? Math.max(0, 1 - (scrollPercent - fadePoint) * 6) : 1;
+                } else if (scrollPercent >= 0.80) {
+                    star.opacity = 0;
+                } else {
+                    star.opacity = 1;
+                }
+                star.update();
+                star.draw();
+            });
+            
+            corals.forEach(coral => {
+                coral.suffocating = scrollPercent >= 0.68 && scrollPercent < 0.80;
+                if (scrollPercent >= 0.80) {
+                    coral.opacity = 0;
+                } else if (scrollPercent < 0.68) {
+                    coral.opacity = 1;
+                    coral.suffocateProgress = 0;
+                }
+                coral.update();
+                coral.draw();
+            });
+            
+            crabs.forEach((crab, index) => {
+                crab.update();
+                if (scrollPercent > 0.72 && scrollPercent < 0.80) {
+                    const fadePoint = 0.72 + (index / crabs.length) * 0.08;
+                    crab.opacity = scrollPercent > fadePoint ? Math.max(0, 1 - (scrollPercent - fadePoint) * 6) : 1;
+                } else if (scrollPercent >= 0.80) {
+                    crab.opacity = 0;
+                } else {
+                    crab.opacity = 1;
+                }
+                crab.draw();
+            });
+            
+            urchins.forEach((urchin, index) => {
+                urchin.grazing = scrollPercent >= 0.05 && scrollPercent < 0.33;
+                
+                if (scrollPercent > 0.40 && scrollPercent < 0.66) {
+                    const diePoint = 0.40 + (index / urchins.length) * 0.24;
+                    if (scrollPercent > diePoint) {
+                        urchin.alive = false;
+                        urchin.opacity = Math.max(0, 1.5 - (scrollPercent - diePoint) * 5);
+                    }
+                } else if (scrollPercent <= 0.40) {
+                    urchin.alive = true;
+                    urchin.opacity = 1;
+                } else if (scrollPercent > 0.90) {
+                    urchin.opacity = Math.min(0.4, (scrollPercent - 0.90) * 4);
+                } else {
+                    urchin.opacity = 0.08;
+                }
+                urchin.update();
+                urchin.draw();
+            });
+            
+            algae.forEach(alga => {
+                if (scrollPercent > 0.55 && scrollPercent < 0.88) {
+                    alga.opacity = Math.min(0.95, (scrollPercent - 0.55) * 3);
+                } else if (scrollPercent >= 0.88) {
+                    alga.opacity = Math.max(0.3, 0.95 - (scrollPercent - 0.88) * 5);
+                } else {
+                    alga.opacity = 0;
+                }
+                alga.draw();
+            });
+            
+            fish.forEach((f, index) => {
+                f.update();
+                if (scrollPercent >= 0.74 && scrollPercent < 0.82) {
+                    const fadePoint = 0.74 + (index / fish.length) * 0.08;
+                    f.opacity = scrollPercent > fadePoint ? Math.max(0, 1 - (scrollPercent - fadePoint) * 6) : 1;
+                } else if (scrollPercent >= 0.82 && scrollPercent < 0.88) {
+                    f.opacity = 0;
+                } else if (scrollPercent >= 0.88) {
+                    f.opacity = Math.min(0.8, (scrollPercent - 0.88) * 5);
+                } else {
+                    f.opacity = 1;
+                }
+                f.draw();
+            });
+            
+            jellyfish.forEach((j, index) => {
+                j.update();
+                if (scrollPercent >= 0.74 && scrollPercent < 0.82) {
+                    const fadePoint = 0.74 + (index / jellyfish.length) * 0.08;
+                    j.opacity = scrollPercent > fadePoint ? Math.max(0, 1 - (scrollPercent - fadePoint) * 6) : 1;
+                } else if (scrollPercent >= 0.82 && scrollPercent < 0.88) {
+                    j.opacity = 0;
+                } else if (scrollPercent >= 0.88) {
+                    j.opacity = Math.min(0.7, (scrollPercent - 0.88) * 4);
+                } else {
+                    j.opacity = 1;
+                }
+                j.draw();
+            });
+            
+            const particleColor = scrollPercent > 0.6 && scrollPercent < 0.88 ? '#b8e6b8' : 'white';
+            particles.forEach(p => {
+                p.update();
+                p.draw(particleColor);
+            });
+            
+            ctx.globalAlpha = 1;
+            
+            overlayText.style.opacity = '0';
+            yearDisplay.style.opacity = '0';
+            counterDisplay.style.opacity = '0';
+            
+            if (scrollPercent < 0.02) {
+                overlayText.textContent = '';
+            } else if (scrollPercent < 0.05) {
+                overlayText.textContent = 'Caribbean Coral Reef';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.09) {
+                overlayText.textContent = 'Sea urchins graze constantly';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.13) {
+                overlayText.textContent = 'Keeping algae under control';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.17) {
+                overlayText.textContent = 'This creates space for corals to grow';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.21) {
+                overlayText.textContent = 'A balanced ecosystem';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.25) {
+                overlayText.textContent = 'Countless species coexist';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.29) {
+                yearDisplay.textContent = '1982';
+                yearDisplay.style.opacity = '0.4';
+                counterDisplay.style.opacity = '1';
+                counterNumber.textContent = '12';
+                counterNumber.style.color = '#4ecdc4';
+                overlayText.textContent = 'A thriving reef';
+                overlayText.style.opacity = '0.8';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.33) {
+                yearDisplay.textContent = '1983';
+                yearDisplay.style.opacity = '0.5';
+                overlayText.textContent = 'January 1983';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.37) {
+                yearDisplay.textContent = '1983';
+                yearDisplay.style.opacity = '0.5';
+                counterDisplay.style.opacity = '1';
+                overlayText.textContent = 'A mysterious disease appears';
+                overlayText.style.opacity = '0.9';
+                overlayText.style.color = '#ff6b6b';
+                counterNumber.textContent = '10';
+                counterNumber.style.color = '#ff9b6b';
+            } else if (scrollPercent < 0.44) {
+                yearDisplay.textContent = '1983';
+                yearDisplay.style.opacity = '0.5';
+                counterDisplay.style.opacity = '1';
+                overlayText.textContent = 'Spreading 1 to 2 kilometers per day';
+                overlayText.style.color = '#ff6b6b';
+                overlayText.style.opacity = '1';
+                counterNumber.textContent = '6';
+                counterNumber.style.color = '#ff7b6b';
+            } else if (scrollPercent < 0.50) {
+                yearDisplay.textContent = '1983';
+                yearDisplay.style.opacity = '0.5';
+                counterDisplay.style.opacity = '1';
+                overlayText.textContent = 'A ciliate pathogen attacking urchins';
+                overlayText.style.opacity = '0.9';
+                overlayText.style.color = '#ff5b5b';
+                counterNumber.textContent = '3';
+                counterNumber.style.color = '#ff5b5b';
+            } else if (scrollPercent < 0.56) {
+                yearDisplay.textContent = '1984';
+                yearDisplay.style.opacity = '0.5';
+                counterDisplay.style.opacity = '1';
+                overlayText.textContent = 'Urchins dying from Panama to Bermuda';
+                overlayText.style.color = '#ff4444';
+                overlayText.style.opacity = '1';
+                counterNumber.textContent = '1';
+                counterNumber.style.color = '#ff4444';
+            } else if (scrollPercent < 0.62) {
+                yearDisplay.textContent = '1984';
+                yearDisplay.style.opacity = '0.4';
+                counterDisplay.style.opacity = '1';
+                overlayText.textContent = '93 to 99 percent vanished';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#ff2222';
+                counterNumber.textContent = '0.1';
+                counterNumber.style.color = '#ff2222';
+            } else if (scrollPercent < 0.66) {
+                yearDisplay.textContent = '1984';
+                yearDisplay.style.opacity = '0.4';
+                counterDisplay.style.opacity = '1';
+                overlayText.textContent = 'In just 13 months';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#ff2222';
+                counterNumber.textContent = '0.1';
+                counterNumber.style.color = '#ff2222';
+            } else if (scrollPercent < 0.70) {
+                overlayText.textContent = 'Without urchins grazing...';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.74) {
+                overlayText.textContent = 'Algae would overgrow corals';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#90ee90';
+            } else if (scrollPercent < 0.78) {
+                overlayText.textContent = 'Corals would suffocate and die';
+                overlayText.style.opacity = '0.9';
+                overlayText.style.color = 'white';
+                counterDisplay.style.opacity = '1';
+                counterNumber.textContent = '0.1';
+                counterNumber.style.color = '#e74c3c';
+            } else if (scrollPercent < 0.82) {
+                overlayText.textContent = 'Fish would lose their habitat';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.86) {
+                overlayText.textContent = 'All species would disappear';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#ff8888';
+            } else if (scrollPercent < 0.88) {
+                overlayText.textContent = 'Only algae would remain...';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#90ee90';
+                yearDisplay.textContent = '2000s';
+                yearDisplay.style.opacity = '0.3';
+            } else if (scrollPercent < 0.90) {
+                overlayText.textContent = 'This is what WOULD have happened';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#ffaa44';
+            } else if (scrollPercent < 0.92) {
+                overlayText.textContent = 'If the urchins had gone extinct';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#ffaa44';
+            } else if (scrollPercent < 0.94) {
+                overlayText.textContent = 'But they were never endangered';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = 'white';
+            } else if (scrollPercent < 0.96) {
+                overlayText.textContent = 'A pathogen nearly wiped them out';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#ff6b6b';
+            } else if (scrollPercent < 0.98) {
+                overlayText.textContent = 'Scientists now breed urchins in labs';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#4ecdc4';
+            } else {
+                overlayText.textContent = 'Releasing thousands back to reefs';
+                overlayText.style.opacity = '1';
+                overlayText.style.color = '#4ecdc4';
+                counterDisplay.style.opacity = '1';
+                counterNumber.textContent = '2-3';
+                counterNumber.style.color = '#4ecdc4';
+            }
+            
+            scrollHint.style.opacity = scrollPercent > 0.02 ? '0' : '1';
+            titleScreen.style.opacity = scrollPercent > 0.015 ? '0' : '1';
+            
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>
